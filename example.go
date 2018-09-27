@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -266,11 +267,111 @@ func main() {
 	fmt.Println("perim:", rp.perim())
 
 	rr := recti{width: 3, height: 4}
-	ccc:= circlei{radius:5}
+	ccc := circlei{radius: 5}
 
 	measure(rr)
 	measure(ccc)
 
+	fmt.Println("----------------------------")
+	for _, i := range [] int{7, 42} {
+		if r, e := f1(i); e != nil {
+			fmt.Println("f1 failed", e)
+		} else {
+			fmt.Println("f1 worked", r)
+		}
+	}
+
+	for _, i := range [] int{7, 42} {
+		if r, e := f2(i); e != nil {
+			fmt.Println("f2 failed", e)
+		} else {
+			fmt.Println("f2 worked", r)
+		}
+	}
+
+	_, ee := f2(42)
+	if ae, ok := ee.(*argError); ok {
+		fmt.Println(ae.arg)
+		fmt.Println(ae.prob)
+	}
+	fmt.Println("----------------------------")
+	fc("direct")
+
+	go fc("goroutine")
+
+	go func(msg string) {
+		fmt.Println(msg)
+	}("going")
+
+	//等待输入
+	//var input string
+	//fmt.Scanln(&input)
+	fmt.Println("done")
+
+	fmt.Println("----------------------------")
+	messages := make(chan string)
+	go func() { messages <- "ping" }()
+	msg := <-messages
+	fmt.Println(msg)
+
+	fmt.Println("----------------------------")
+	bufmessages := make(chan string, 2)
+	bufmessages <- "buffed1"
+	bufmessages <- "buffed2"
+
+	fmt.Println(<-bufmessages)
+	fmt.Println(<-bufmessages)
+
+	fmt.Println("----------------------------")
+	done := make(chan bool, 1)
+	go worker(done)
+
+	<-done
+
+	fmt.Println("----------------------------")
+	pings := make(chan string, 1)
+	pongs := make(chan string, 1)
+	ping(pings, "passed message")
+	pong(pings, pongs)
+	fmt.Println(<-pongs)
+
+	fmt.Println("----------------------------")
+	c1 := make(chan string)
+	c2 := make(chan string)
+	go func() {
+		time.Sleep(time.Second * 3)
+		c1 <- "one"
+	}()
+	go func() {
+		time.Sleep(time.Second * 2)
+		c2 <- "two"
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case msg1 := <-c1:
+			fmt.Println("received", msg1)
+		case msg2 := <-c2:
+			fmt.Println("received", msg2)
+		}
+	}
+
+}
+
+func ping(pings chan<- string, msg string) {
+	pings <- msg
+}
+
+func pong(pings <-chan string, pongs chan<- string) {
+	msg := <-pings
+	pongs <- msg
+}
+
+func worker(done chan bool) {
+	fmt.Println("working...")
+	time.Sleep(time.Second)
+	fmt.Println("done")
+	done <- true
 }
 
 func plus(a int, b int) int {
@@ -363,3 +464,34 @@ func measure(g geometry) {
 	fmt.Println(g.area())
 	fmt.Println(g.perim())
 }
+
+func f1(arg int) (int, error) {
+	if arg == 42 {
+		return -1, errors.New("can't work with 42")
+	}
+	return arg + 3, nil
+}
+
+type argError struct {
+	arg  int
+	prob string
+}
+
+func (e *argError) Error() string {
+	return fmt.Sprintf("%d - %s", e.arg, e.prob)
+}
+
+func f2(arg int) (int, error) {
+	if arg == 42 {
+		return -1, &argError{arg, "can't work with it"}
+	}
+	return arg + 3, nil
+}
+
+func fc(from string) {
+	for i := 0; i < 3; i++ {
+		fmt.Println(from, ":", i)
+	}
+}
+
+//https://books.studygolang.com/gobyexample/errors/
