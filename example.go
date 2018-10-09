@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -356,6 +358,195 @@ func main() {
 		}
 	}
 
+	fmt.Println("----------------------------")
+	cc1 := make(chan string, 1)
+	go func() {
+		time.Sleep(time.Second * 2)
+		cc1 <- "result 1"
+	}()
+
+	select {
+	case res := <-cc1:
+		fmt.Println(res)
+	case <-time.After(time.Second * 1):
+		fmt.Println("timeout 1")
+	}
+
+	cc2 := make(chan string, 1)
+	go func() {
+		time.Sleep(time.Second * 2)
+		cc2 <- "result 2"
+	}()
+
+	select {
+	case res := <-cc2:
+		fmt.Println(res)
+	case <-time.After(time.Second * 3):
+		fmt.Println("timeout 2")
+	}
+
+	fmt.Println("----------------------------")
+	messages1 := make(chan string)
+	signals := make(chan bool)
+
+	select {
+	case msg := <-messages1:
+		fmt.Println("received message", msg)
+	default:
+		fmt.Println("no message received")
+	}
+
+	msg11 := "hi"
+	select {
+	case messages1 <- msg11:
+		fmt.Println("sent message", msg11)
+	default:
+		fmt.Println("no message sent")
+	}
+
+	select {
+	case msg := <-messages1:
+		fmt.Println("received message", msg)
+	case sig := <-signals:
+		fmt.Println("received signal", sig)
+	default:
+		fmt.Println("no activity")
+	}
+
+	fmt.Println("----------------------------")
+	jobs := make(chan int, 5)
+	done1 := make(chan bool)
+
+	go func() {
+		for {
+			j, more := <-jobs
+			if more {
+				fmt.Println("received job", j)
+			} else {
+				fmt.Println("received all jobs")
+				done1 <- true
+				return
+			}
+		}
+	}()
+
+	for j := 1; j <= 3; j++ {
+		jobs <- j
+		fmt.Println("send job", j)
+	}
+	close(jobs)
+	fmt.Println("send all jobs")
+
+	<-done1
+
+	fmt.Println("----------------------------")
+
+	queue := make(chan string, 2)
+	queue <- "one"
+	queue <- "two"
+	close(queue)
+	for elem := range queue {
+		fmt.Println(elem)
+	}
+
+	fmt.Println("----------------------------")
+	timer1 := time.NewTimer(time.Second * 2)
+
+	<-timer1.C
+	fmt.Println("Timer 1 expired")
+
+	timer2 := time.NewTimer(time.Second)
+	go func() {
+		<-timer2.C
+		fmt.Println("Timer 2 expired")
+	}()
+	stop2 := timer2.Stop()
+	if stop2 {
+		fmt.Println("Timer 2 stopped")
+	}
+
+	fmt.Println("----------------------------")
+	ticker := time.NewTicker(time.Microsecond * 500)
+	go func() {
+		for t := range ticker.C {
+			fmt.Println("Tick at ", t)
+		}
+	}()
+	time.Sleep(time.Microsecond * 16000)
+	ticker.Stop()
+	fmt.Println("Ticker stopped")
+
+	fmt.Println("----------------------------")
+	jobs1 := make(chan int, 100)
+	results1 := make(chan int, 100)
+
+	for w := 1; w <= 3; w++ {
+		go worker1(w, jobs1, results1)
+	}
+
+	for j := 1; j <= 9; j++ {
+		jobs1 <- j
+	}
+	close(jobs1)
+	for a := 1; a <= 9; a++ {
+		<-results1
+	}
+	fmt.Println("----------------------------")
+
+	request1 := make(chan int, 5)
+	for i := 1; i <= 5; i++ {
+		request1 <- i
+	}
+	close(request1)
+
+	limiter := time.Tick(time.Millisecond * 200)
+	for req := range request1 {
+		<-limiter
+		fmt.Println("request ", req, time.Now())
+	}
+
+	burstyLimiter := make(chan time.Time, 3)
+	for i := 1; i < 3; i++ {
+		burstyLimiter <- time.Now()
+	}
+
+	go func() {
+		for t := range time.Tick(time.Millisecond * 200) {
+			burstyLimiter <- t
+		}
+	}()
+
+	burstyRequests := make(chan int, 5)
+	for i := 1; i <= 5; i++ {
+		burstyRequests <- i
+	}
+	close(burstyRequests)
+	for req := range burstyRequests {
+		<-burstyLimiter
+		fmt.Println("request", req, time.Now())
+	}
+
+	fmt.Println("----------------------------")
+
+	var ops uint64 = 0
+	for i:=0;i<50;i++{
+		go func() {
+			atomic.AddUint64(&ops,1)
+			runtime.Gosched()
+		}()
+	}
+	time.Sleep(time.Second)
+	opsFinal:=atomic.LoadUint64(&ops)
+	fmt.Println("ops",opsFinal)
+
+}
+
+func worker1(id int, jobs <-chan int, results chan<- int) {
+	for j := range jobs {
+		fmt.Println("worker ", id, " procession job ", j)
+		time.Sleep(time.Second)
+		results <- j * 2
+	}
 }
 
 func ping(pings chan<- string, msg string) {
