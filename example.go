@@ -4,10 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"runtime"
+	"sort"
 	"sync/atomic"
 	"time"
 )
+
+type ByLength []string
 
 func main() {
 	fmt.Println("go" + "lang")
@@ -112,7 +116,7 @@ func main() {
 	var twoD [2][3]int
 	for tmpi := 0; tmpi < 2; tmpi++ {
 		for tmpj := 0; tmpj < 3; tmpj++ {
-			twoD[tmpi][tmpj] = tmpi + tmpj;
+			twoD[tmpi][tmpj] = tmpi + tmpj
 		}
 	}
 	fmt.Println("2d:", twoD)
@@ -275,7 +279,7 @@ func main() {
 	measure(ccc)
 
 	fmt.Println("----------------------------")
-	for _, i := range [] int{7, 42} {
+	for _, i := range []int{7, 42} {
 		if r, e := f1(i); e != nil {
 			fmt.Println("f1 failed", e)
 		} else {
@@ -283,7 +287,7 @@ func main() {
 		}
 	}
 
-	for _, i := range [] int{7, 42} {
+	for _, i := range []int{7, 42} {
 		if r, e := f2(i); e != nil {
 			fmt.Println("f2 failed", e)
 		} else {
@@ -529,16 +533,73 @@ func main() {
 	fmt.Println("----------------------------")
 
 	var ops uint64 = 0
-	for i:=0;i<50;i++{
+	for i := 0; i < 50; i++ {
 		go func() {
-			atomic.AddUint64(&ops,1)
+			atomic.AddUint64(&ops, 1)
 			runtime.Gosched()
 		}()
 	}
 	time.Sleep(time.Second)
-	opsFinal:=atomic.LoadUint64(&ops)
-	fmt.Println("ops",opsFinal)
+	opsFinal := atomic.LoadUint64(&ops)
+	fmt.Println("ops", opsFinal)
 
+	fmt.Println("----------------------------")
+
+	strs := []string{"c", "a", "b"}
+	sort.Strings(strs)
+	fmt.Println("Strings:", strs)
+
+	ints := []int{7, 2, 4}
+	sort.Ints(ints)
+	fmt.Println("Ints:", ints)
+
+	re := sort.IntsAreSorted(ints)
+	fmt.Println("Sorted: ", re)
+
+	fmt.Println("----------------------------")
+	fruits := []string{"peach", "banana", "kiwi"}
+	sort.Sort(ByLength(fruits))
+	fmt.Println(fruits)
+	fmt.Println("----------------------------")
+	//panic("a problem")
+	//_, err := os.Create("/tmp/file")
+	//if err != nil {
+	//	panic(err)
+	//}
+	fmt.Println("----------------------------")
+	fi := createFile("D://gotest.txt")
+	defer closeFile(fi)
+	wirteFile(fi)
+
+}
+
+func createFile(p string) *os.File {
+	fmt.Println("creating")
+	f, err := os.Create(p)
+	if err != nil {
+		panic(err)
+	}
+	return f
+}
+
+func wirteFile(f *os.File) {
+	fmt.Println("writing")
+	fmt.Fprint(f, "data")
+}
+
+func closeFile(f *os.File) {
+	fmt.Println("closing")
+	f.Close()
+}
+
+func (s ByLength) Len() int {
+	return len(s)
+}
+func (s ByLength) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s ByLength) Less(i, j int) bool {
+	return len(s[i]) < len(s[j])
 }
 
 func worker1(id int, jobs <-chan int, results chan<- int) {
